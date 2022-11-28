@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <vulkan/vulkan.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -10,25 +11,28 @@ int main(int argc, char *argv[]) {
 //										ABBRIR IMAGEN                           //
 ////////////////////////////////////////////////////////////////////////
 	if( argc != 2) {
-		cout <<" Usage: display_image ImageToLoadAndDisplay" << endl;
+		std::cout <<" Usage: display_image ImageToLoadAndDisplay" << std::endl;
 		return -1;
 	}
 
-	Mat image;
-	image = imread(argv[1], 0);   // Read the file
+	cv::Mat image, dst;
+	image = cv::imread(argv[1], 0);   // Read the file
 
 	if(! image.data ){                              // Check for invalid input 
-	  cout <<  "Could not open or find the image" << std::endl ;
+		std::cout <<  "Could not open or find the image" << std::endl ;
 	  return -1;
 	}
 
-	image.convertTo(dts, CV_32F);
-	float arrOut[dst.rows][dst.cols];
+	image.convertTo(dst, CV_8U);
+	const uint32_t NumElements = dst.rows*dst.cols;
+	const uint32_t BufferSize = NumElements * sizeof(int32_t);
+
+	uint32_t* arrOut = (uint32_t*) malloc(sizeof(uint32_t)*BufferSize);
 
 	for (int i=0; i<dst.rows; i++){
-	 for (jnt j=0; j<dst.rows; j++){
-		 arrOut[i][j] = dst.at<float>(i,j);
-	 }
+		for (int j=0; j<dst.cols; j++){
+			arrOut[i*dst.rows+j] = dst.at<uint32_t>(i,j);
+		}
 	}
 
 ////////////////////////////////////////////////////////////////////////
@@ -100,9 +104,6 @@ int main(int argc, char *argv[]) {
     // Bind the buffers to the memory
 	
 	// Create buffers
-	const uint32_t NumElements = 10;
-	const uint32_t BufferSize = NumElements * sizeof(int32_t);
-
 	vk::BufferCreateInfo BufferCreateInfo{
 		vk::BufferCreateFlags(),                    // Flags
 		BufferSize,                                 // Size
@@ -269,21 +270,13 @@ int main(int argc, char *argv[]) {
 			uint64_t(-1));      // Timeout
 
 	// Map output buffer and read results
-	InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
-	std::cout << std::endl;
-	std::cout << "INPUT:  ";
-	for (uint32_t I = 0; I < NumElements; ++I) {
-		std::cout << InBufferPtr[I] << " ";
-	}
-	std::cout << std::endl;
-	Device.unmapMemory(InBufferMemory);
 
 	int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
-	std::cout << "OUTPUT: ";
-	for (uint32_t I = 0; I < NumElements; ++I) {
-		std::cout << OutBufferPtr[I] << " ";
+	for (int i=0; i<dst.rows; i++){
+		for (int j=0; j<dst.cols; j++){
+			dst.at<uint32_t>(i,j) = OutBufferPtr[i*dst.rows+j];
+		}
 	}
-	std::cout << std::endl;
 	Device.unmapMemory(OutBufferMemory);
 ////////////////////////////////////////////////////////////////////////
 //                              CLEANUP                               //
@@ -304,10 +297,12 @@ int main(int argc, char *argv[]) {
 	Device.destroy();
 	Instance.destroy();
 
-	namedWindow( "Display window", WINDOW_AUTOSIZE );// Create a window for display.
-	imshow( "Display window", image );                   // Show our image inside it.
+	namedWindow( "Display window", cv::WINDOW_AUTOSIZE );// Create a window for display.
+	imshow( "Display window", dst );                   // Show our image inside it.
 
-	while (waitKey(0) != 'd');                                          // Wait for a keystroke in the window
+	while (cv::waitKey(0) != 'd'){}
+
+	free(arrOut);
 
    return 0;
 }
