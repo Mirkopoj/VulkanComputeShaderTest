@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <fstream>
 
@@ -16,24 +17,17 @@ int main(int argc, char *argv[]) {
 	}
 
 	cv::Mat image, dst;
-	image = cv::imread(argv[1], 0);   // Read the file
+	image = cv::imread(argv[1]);   // Read the file
+	cv::cvtColor(image,dst,cv::COLOR_BGR2GRAY);
 
 	if(! image.data ){                              // Check for invalid input 
 		std::cout <<  "Could not open or find the image" << std::endl ;
 	  return -1;
 	}
 
-	image.convertTo(dst, CV_8U);
+	dst.convertTo(dst, CV_8U);
 	const uint32_t NumElements = dst.rows*dst.cols;
 	const uint32_t BufferSize = NumElements * sizeof(int32_t);
-
-	uint32_t* arrOut = (uint32_t*) malloc(sizeof(uint32_t)*BufferSize);
-
-	for (int i=0; i<dst.rows; i++){
-		for (int j=0; j<dst.cols; j++){
-			arrOut[i*dst.rows+j] = dst.at<uint32_t>(i,j);
-		}
-	}
 
 ////////////////////////////////////////////////////////////////////////
 //                          VULKAN INSTANCE                           //
@@ -106,7 +100,7 @@ int main(int argc, char *argv[]) {
 	// Create buffers
 	vk::BufferCreateInfo BufferCreateInfo{
 		vk::BufferCreateFlags(),                    // Flags
-		BufferSize,                                 // Size
+		BufferSize+1,                               // Size
 		vk::BufferUsageFlagBits::eStorageBuffer,    // Usage
 		vk::SharingMode::eExclusive,                // Sharing mode
 		1,                                          // Number of queue family indices
@@ -147,9 +141,12 @@ int main(int argc, char *argv[]) {
 
 	// Map memory and write
 	int32_t* InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
-	for (uint32_t I = 0; I < NumElements; ++I) {
-		InBufferPtr[I] = I;
+	for (int i=0; i<dst.rows; i++){
+		for (int j=0; j<dst.cols; j++){
+			InBufferPtr[i*dst.cols+j+1] = dst.at<uint8_t>(i,j);
+		}
 	}
+	InBufferPtr[0] = dst.cols;
 	Device.unmapMemory(InBufferMemory);
 
 	// Bind buffers to memory
@@ -162,7 +159,7 @@ int main(int argc, char *argv[]) {
 
 	// Shader module
 	std::vector<char> ShaderContents;
-	if (std::ifstream ShaderFile{ "shaders/shader.comp.spv", std::ios::binary | std::ios::ate }) {
+	if (std::ifstream ShaderFile{ "shaders/edges.spv", std::ios::binary | std::ios::ate }) {
 		const size_t FileSize = ShaderFile.tellg();
 		ShaderFile.seekg(0);
 		ShaderContents.resize(FileSize, '\0');
@@ -274,10 +271,22 @@ int main(int argc, char *argv[]) {
 	int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
 	for (int i=0; i<dst.rows; i++){
 		for (int j=0; j<dst.cols; j++){
-			dst.at<uint32_t>(i,j) = OutBufferPtr[i*dst.rows+j];
+			dst.at<uint8_t>(i,j) = OutBufferPtr[i*dst.cols+j];
 		}
 	}
 	Device.unmapMemory(OutBufferMemory);
+
+////////////////////////////////////////////////////////////////////////
+//                              IMAGEN                                //
+////////////////////////////////////////////////////////////////////////
+	namedWindow( "Despues", cv::WINDOW_AUTOSIZE );// Create a window for display.
+	namedWindow( "Antes", cv::WINDOW_AUTOSIZE );// Create a window for display.
+															  
+	imshow( "Despues", dst );                   // Show our image inside it.
+	imshow( "Antes", image );                   // Show our image inside it.
+
+	while (cv::waitKey(0) != 'd'){}
+
 ////////////////////////////////////////////////////////////////////////
 //                              CLEANUP                               //
 ////////////////////////////////////////////////////////////////////////
@@ -296,13 +305,6 @@ int main(int argc, char *argv[]) {
 	Device.destroyBuffer(OutBuffer);
 	Device.destroy();
 	Instance.destroy();
-
-	namedWindow( "Display window", cv::WINDOW_AUTOSIZE );// Create a window for display.
-	imshow( "Display window", dst );                   // Show our image inside it.
-
-	while (cv::waitKey(0) != 'd'){}
-
-	free(arrOut);
 
    return 0;
 }
