@@ -202,6 +202,44 @@ int main(int argc, char *argv[]) {
 		);
 	vk::Pipeline ComputePipeline = Device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo).value;
 
+	// Shader module
+	if (std::ifstream ShaderFile{ "shaders/edges.spv", std::ios::binary | std::ios::ate }) {
+		const size_t FileSize = ShaderFile.tellg();
+		ShaderFile.seekg(0);
+		ShaderContents.resize(FileSize, '\0');
+		ShaderFile.read(ShaderContents.data(), FileSize);
+	}
+
+	vk::ShaderModuleCreateInfo ShaderModuleCreateInfo2(
+		vk::ShaderModuleCreateFlags(),                                // Flags
+		ShaderContents.size(),                                        // Code size
+		reinterpret_cast<const uint32_t*>(ShaderContents.data()));    // Code
+   ShaderModule = Device.createShaderModule(ShaderModuleCreateInfo2);
+
+	DescriptorSetLayoutCreateInfo.flags = vk::DescriptorSetLayoutCreateFlags();
+	DescriptorSetLayoutCreateInfo.setBindings(DescriptorSetLayoutBinding);
+	DescriptorSetLayout = Device.createDescriptorSetLayout(DescriptorSetLayoutCreateInfo);
+
+	// Pipeline Layout
+	PipelineLayoutCreateInfo.flags = vk::PipelineLayoutCreateFlags();
+	PipelineLayoutCreateInfo.setSetLayouts(DescriptorSetLayout);
+	PipelineLayout = Device.createPipelineLayout(PipelineLayoutCreateInfo);
+	PipelineCache = Device.createPipelineCache(vk::PipelineCacheCreateInfo());
+
+	// Compute Pipeline
+	vk::PipelineShaderStageCreateInfo PipelineShaderCreateInfo2(
+		vk::PipelineShaderStageCreateFlags(),  // Flags
+		vk::ShaderStageFlagBits::eCompute,     // Stage
+		ShaderModule,                          // Shader Module
+		"main"                                 // Shader Entry Point
+		);
+	vk::ComputePipelineCreateInfo ComputePipelineCreateInfo2(
+		vk::PipelineCreateFlags(),    // Flags
+		PipelineShaderCreateInfo,     // Shader Create Info struct
+		PipelineLayout                // Pipeline Layout
+		);
+	vk::Pipeline ComputePipeline2 = Device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo).value;
+
 ////////////////////////////////////////////////////////////////////////
 //                          DESCRIPTOR SETS                           //
 ////////////////////////////////////////////////////////////////////////
@@ -232,9 +270,9 @@ int main(int argc, char *argv[]) {
 	vk::CommandPool CommandPool = Device.createCommandPool(CommandPoolCreateInfo);
 	// Allocate Command buffer from Pool
 	vk::CommandBufferAllocateInfo CommandBufferAllocInfo(
-    CommandPool,                         // Command Pool
-    vk::CommandBufferLevel::ePrimary,    // Level
-    1);                                  // Num Command Buffers
+		CommandPool,                         // Command Pool
+		vk::CommandBufferLevel::ePrimary,    // Level
+		1);                                  // Num Command Buffers
 	const std::vector<vk::CommandBuffer> CmdBuffers = Device.allocateCommandBuffers(CommandBufferAllocInfo);
 	vk::CommandBuffer CmdBuffer = CmdBuffers.front();
 
@@ -265,6 +303,8 @@ int main(int argc, char *argv[]) {
 			{ Fence },             // List of fences
 			true,               // Wait All
 			uint64_t(-1));      // Timeout
+
+
 
 	// Map output buffer and read results
 
