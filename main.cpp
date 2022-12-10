@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
 
 	// Shader module
 	std::vector<char> ShaderContents;
-	if (std::ifstream ShaderFile{ "shaders/edges.spv", std::ios::binary | std::ios::ate }) {
+	if (std::ifstream ShaderFile{ "shaders/blur.spv", std::ios::binary | std::ios::ate }) {
 		const size_t FileSize = ShaderFile.tellg();
 		ShaderFile.seekg(0);
 		ShaderContents.resize(FileSize, '\0');
@@ -216,16 +216,6 @@ int main(int argc, char *argv[]) {
 		reinterpret_cast<const uint32_t*>(ShaderContents.data()));    // Code
    ShaderModule = Device.createShaderModule(ShaderModuleCreateInfo2);
 
-	DescriptorSetLayoutCreateInfo.flags = vk::DescriptorSetLayoutCreateFlags();
-	DescriptorSetLayoutCreateInfo.setBindings(DescriptorSetLayoutBinding);
-	DescriptorSetLayout = Device.createDescriptorSetLayout(DescriptorSetLayoutCreateInfo);
-
-	// Pipeline Layout
-	PipelineLayoutCreateInfo.flags = vk::PipelineLayoutCreateFlags();
-	PipelineLayoutCreateInfo.setSetLayouts(DescriptorSetLayout);
-	PipelineLayout = Device.createPipelineLayout(PipelineLayoutCreateInfo);
-	PipelineCache = Device.createPipelineCache(vk::PipelineCacheCreateInfo());
-
 	// Compute Pipeline
 	vk::PipelineShaderStageCreateInfo PipelineShaderCreateInfo2(
 		vk::PipelineShaderStageCreateFlags(),  // Flags
@@ -235,10 +225,10 @@ int main(int argc, char *argv[]) {
 		);
 	vk::ComputePipelineCreateInfo ComputePipelineCreateInfo2(
 		vk::PipelineCreateFlags(),    // Flags
-		PipelineShaderCreateInfo,     // Shader Create Info struct
+		PipelineShaderCreateInfo2,     // Shader Create Info struct
 		PipelineLayout                // Pipeline Layout
 		);
-	vk::Pipeline ComputePipeline2 = Device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo).value;
+	vk::Pipeline ComputePipeline2 = Device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo2).value;
 
 ////////////////////////////////////////////////////////////////////////
 //                          DESCRIPTOR SETS                           //
@@ -304,11 +294,38 @@ int main(int argc, char *argv[]) {
 			true,               // Wait All
 			uint64_t(-1));      // Timeout
 
+	// Record commands
+	vk::CommandBufferBeginInfo CmdBufferBeginInfo2(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	CmdBuffer.begin(CmdBufferBeginInfo2);
+	CmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, ComputePipeline2);
+	CmdBuffer.bindDescriptorSets(
+			vk::PipelineBindPoint::eCompute,    // Bind point
+			PipelineLayout,                  // Pipeline Layout
+			0,                               // First descriptor set
+			{ DescriptorSet },               // List of descriptor sets
+			{});                             // Dynamic offsets
+	CmdBuffer.dispatch(NumElements, 1, 1);
+	CmdBuffer.end();
+
+	// Fence and submit
+	vk::Fence Fence2 = Device.createFence(vk::FenceCreateInfo());
+	vk::SubmitInfo SubmitInfo2(
+			0,                // Num Wait Semaphores
+			nullptr,        // Wait Semaphores
+			nullptr,        // Pipeline Stage Flags
+			1,              // Num Command Buffers
+			&CmdBuffer);    // List of command buffers
+	Queue.submit({ SubmitInfo2 }, Fence2);
+	(void) Device.waitForFences(
+			{ Fence2 },             // List of fences
+			true,               // Wait All
+			uint64_t(-1));      // Timeout
+
 
 
 	// Map output buffer and read results
 
-	int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
+	int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
 	for (int i=0; i<dst.rows; i++){
 		for (int j=0; j<dst.cols; j++){
 			dst.at<uint8_t>(i,j) = OutBufferPtr[i*dst.cols+j];
