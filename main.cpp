@@ -328,7 +328,7 @@ int main(int argc, char *argv[]) {
 	int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
 	for (int i=0; i<dst.rows; i++){
 		for (int j=0; j<dst.cols; j++){
-			dst.at<uint8_t>(i,j) = OutBufferPtr[i*dst.cols+j];
+			dst.at<uint8_t>(i,j) = OutBufferPtr[i*dst.cols+j+1];
 		}
 	}
 	Device.unmapMemory(OutBufferMemory);

@@ -27,8 +27,9 @@ void main() {
 	/* } */
 	const uint id = gl_GlobalInvocationID.x; // current offset
 	ancho = inbuf[0];
+	outbuf[0] = inbuf[0];
 	const uint row = id/ancho;
 	const uint col = id%ancho;
 
-	outbuf[id] = blur(row, col);
+	outbuf[id+1] = blur(row, col);
 } 

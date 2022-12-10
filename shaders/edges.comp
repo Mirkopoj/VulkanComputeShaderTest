@@ -40,8 +40,9 @@ void main() {
 	/* } */
 	const uint id = gl_GlobalInvocationID.x; // current offset
 	ancho = inbuf[0];
+	outbuf[0] = inbuf[0];
 	const uint row = id/ancho;
 	const uint col = id%ancho;
 
-	outbuf[id] = edge_v(row, col) | edge_h(row, col);
+	outbuf[id+1] = edge_v(row, col) | edge_h(row, col);
 } 
